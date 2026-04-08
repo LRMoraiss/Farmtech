@@ -1,7 +1,8 @@
 # Relatório Técnico: FarmTech - Domo Geodésico Autônomo para o Sertão
 
 **Autor:** Luciano Morais  
-**Programa:** EmbarcaTech - Projeto Final  
+**Curso:** Residência Tecnológica em Sistemas Embarcados  
+**Instituição:** EmbarcaTech  
 **Data:** Abril de 2026  
 **Plataforma:** BitDogLab v3 (Raspberry Pi Pico W - RP2040)
 
@@ -9,101 +10,103 @@
 
 ## a. Apresentação
 
-O **FarmTech** é um sistema embarcado autônomo de controle ambiental projetado para cultivo hidropônico em domos geodésicos no Sertão Brasileiro. 
+O projeto **FarmTech** consiste no desenvolvimento de um sistema embarcado autônomo de controle ambiental, projetado especificamente para otimizar o cultivo hidropônico em domos geodésicos no Sertão Brasileiro. 
 
-A agricultura no semiárido nordestino enfrenta desafios severos: escassez hídrica, altas temperaturas, baixa umidade relativa do ar e intensa radiação solar. O cultivo tradicional a céu aberto frequentemente resulta em perda de safra e uso ineficiente da pouca água disponível. 
+A agricultura no semiárido nordestino enfrenta desafios climáticos severos, caracterizados pela escassez hídrica, altas temperaturas, baixa umidade relativa do ar e intensa radiação solar. O cultivo tradicional a céu aberto nessas condições frequentemente resulta em perda de safra e uso ineficiente dos limitados recursos hídricos disponíveis. 
 
-O FarmTech resolve esse problema criando um microclima controlado dentro de um domo geodésico. O sistema atua como a Unidade Central de Controle, monitorando continuamente o ambiente e tomando decisões autônomas para manter condições ideais de cultivo. Ele protege as plantas do clima extremo e otimiza o uso de água através da hidroponia de circuito fechado, garantindo resiliência e eficiência na produção agrícola.
+Nesse contexto, o FarmTech propõe uma solução tecnológica baseada na criação de um microclima controlado dentro de uma estrutura geodésica. O sistema atua como a Unidade Central de Controle (UCC), monitorando continuamente as variáveis ambientais e tomando decisões autônomas para manter as condições ideais de cultivo. Ao proteger as plantas do clima extremo e otimizar o uso de água através da hidroponia de circuito fechado, o projeto visa garantir resiliência e eficiência na produção agrícola familiar e comercial na região.
 
 ## b. Objetivos
 
 ### Objetivo Geral
-Desenvolver um sistema embarcado de baixo custo e alta eficiência para automação de estufas hidropônicas no semiárido, utilizando a plataforma RP2040 (BitDogLab v3).
+Desenvolver e implementar um sistema embarcado de baixo custo e alta eficiência para a automação de estufas hidropônicas no semiárido, utilizando a plataforma de desenvolvimento BitDogLab v3, baseada no microcontrolador RP2040.
 
 ### Objetivos Específicos
-- Monitorar em tempo real variáveis críticas: temperatura, umidade, luminosidade e nível de água.
-- Controlar atuadores (ventilação, nebulização, iluminação e bombas) de forma autônoma baseada em setpoints pré-definidos.
-- Fornecer interface local (Display OLED e Matriz de LEDs) para diagnóstico rápido.
-- Transmitir dados de telemetria via comunicação serial/Wi-Fi para monitoramento remoto (IoT).
-- Garantir resiliência do sistema com modos de fallback em caso de falha de sensores.
+- Monitorar em tempo real variáveis ambientais críticas: temperatura, umidade, luminosidade e nível do reservatório de água.
+- Controlar atuadores (sistemas de ventilação, nebulização, iluminação suplementar e bombas d'água) de forma autônoma, baseada em lógicas de controle e *setpoints* pré-definidos.
+- Fornecer uma interface de diagnóstico local clara e responsiva através de um Display Gráfico OLED e uma Matriz de LEDs WS2812B.
+- Transmitir dados de telemetria via comunicação serial (UART) formatados em JSON, preparando o sistema para integração IoT via Wi-Fi.
+- Garantir a resiliência do sistema através da implementação de modos de *fallback* em caso de falha na leitura dos sensores principais.
 
 ## c. Requisitos Funcionais
 
-O sistema foi projetado para atender aos seguintes requisitos:
-- **Leitura de Sensores**: Aquisição de dados analógicos (ADC) e digitais a cada 1 segundo.
-- **Controle Autônomo**: Acionamento de relés baseado em regras lógicas de clima e hidratação.
-- **Modo Manual/Auto**: Alternância de modo de operação via interrupção de botão (Botão A).
-- **Interface Visual**: Exibição de status na Matriz de LEDs WS2812B e Display Gráfico OLED (I2C).
-- **Alertas Críticos**: Acionamento de alarme sonoro (Buzzer) em condições extremas (Temp > 35°C ou Água < 5%).
-- **Telemetria**: Envio de dados formatados em JSON via interface UART.
+Para atender aos objetivos propostos, o sistema foi projetado com os seguintes requisitos funcionais:
+- **Aquisição de Dados Sensoriais**: O sistema deve realizar a leitura de dados analógicos (via ADC) e digitais a uma taxa de atualização de 1 Hz (1 segundo).
+- **Controle Lógico Autônomo**: O microcontrolador deve acionar os relés correspondentes aos atuadores com base em regras lógicas que avaliam o clima e a necessidade de hidratação.
+- **Alternância de Modos de Operação**: O sistema deve permitir a transição entre os modos "Automático" e "Manual" através de interrupções de hardware geradas por botões físicos (Botão A), com tratamento adequado de *debounce*.
+- **Interface Visual de Status**: O status operacional e as leituras dos sensores devem ser exibidos continuamente no Display OLED (via I2C) e refletidos na Matriz de LEDs.
+- **Sistema de Alertas Críticos**: Em condições ambientais extremas (Temperatura > 35°C ou Nível de Água < 5%), o sistema deve acionar um alarme sonoro (Buzzer) e sinalizar a criticidade na telemetria.
+- **Comunicação de Telemetria**: Os dados coletados e o estado dos atuadores devem ser empacotados em formato JSON e transmitidos via interface UART.
 
 ## d. Arquitetura de Hardware
 
-A BitDogLab v3 atua como o cérebro do sistema, integrando os seguintes componentes:
+O hardware do projeto é centralizado na placa didática **BitDogLab v3**, que integra os componentes necessários para a simulação e controle do domo geodésico:
 
-- **Microcontrolador**: Raspberry Pi Pico W (RP2040) - Processador dual-core ARM Cortex-M0+, responsável por toda a lógica de controle.
-- **Sensores (Entradas)**:
-  - **DHT22 (GP4)**: Monitoramento digital de temperatura e umidade interna. *(Fallback implementado via Joystick ADC0/ADC1 para simulação/resiliência)*.
-  - **LDR (GP28 - ADC2)**: Sensor analógico de luz ambiente para controle de fotossíntese.
-  - **Sensor de Nível (GP29 - ADC3)**: Monitoramento analógico do reservatório de água/nutrientes.
-  - **Botões (GP5/GP6)**: Entradas digitais com *pull-up* para controle de interface.
-- **Atuadores e Interfaces (Saídas)**:
-  - **Relés de Controle (GP8 a GP12)**: Controle de potência para Exaustor, Entrada de Ar, Nebulizador, Grow Lights e Bomba d'Água.
-  - **Display OLED (GP14/GP15 - I2C1)**: Interface gráfica local para exibição de telemetria.
-  - **Matriz WS2812B (GP7)**: Feedback visual rápido do status do sistema.
-  - **Buzzer (GP13)**: Alertas sonoros de criticidade.
-- **Comunicação**:
-  - **Interface UART (GP0/GP1 - UART0)**: Transmissão de telemetria para módulos externos ou debug.
+- **Microcontrolador Central**: Raspberry Pi Pico W (RP2040) - Processador dual-core ARM Cortex-M0+ operando a 133 MHz, responsável pelo processamento da lógica de controle e gerenciamento dos periféricos.
+- **Sensores (Módulos de Entrada)**:
+  - **Sensor de Temperatura e Umidade (DHT22 - GP4)**: Monitoramento digital do clima interno. *(Nota: Foi implementado um sistema de fallback utilizando os eixos X e Y do Joystick nos pinos ADC0 e ADC1 para simulação de dados em caso de falha do sensor físico)*.
+  - **Sensor de Luminosidade (LDR - GP28 / ADC2)**: Leitura analógica da luz ambiente para controle da iluminação suplementar (fotossíntese).
+  - **Sensor de Nível de Água (GP29 / ADC3)**: Monitoramento analógico do volume do reservatório de solução nutritiva.
+  - **Botões de Controle (GP5 e GP6)**: Entradas digitais configuradas com resistores de *pull-up* internos para interação do usuário.
+- **Atuadores e Interfaces (Módulos de Saída)**:
+  - **Módulo de Relés (GP8 a GP12)**: Sinais de controle digital para acionamento de cargas de potência (Exaustor, Entrada de Ar, Nebulizador, Grow Lights e Bomba d'Água).
+  - **Display Gráfico OLED (GP14/GP15 - I2C1)**: Interface visual local baseada no controlador SSD1306, operando via protocolo I2C.
+  - **Matriz de LEDs Inteligentes (WS2812B - GP7)**: Matriz 5x5 controlada via máquina de estados PIO (Programmable I/O) para *feedback* visual rápido.
+  - **Buzzer Passivo (GP13)**: Emissor de alertas sonoros.
+- **Módulo de Comunicação**:
+  - **Interface UART (GP0/GP1 - UART0)**: Configurada a 115200 bps para transmissão da telemetria JSON.
 
 ## e. Arquitetura do Firmware
 
-O software embarcado foi desenvolvido em **C/C++ utilizando o Pico SDK**, estruturado em um loop infinito de controle (Padrão *Super Loop* com Interrupções):
+O software embarcado foi desenvolvido inteiramente em linguagem **C/C++**, utilizando as bibliotecas padrão do **Raspberry Pi Pico SDK**. A arquitetura de software segue o padrão *Super Loop* (Loop Infinito) combinado com o uso de interrupções para eventos assíncronos. O código está modularizado nas seguintes etapas principais:
 
-1. **Inicialização (`setup_hardware`)**: Configuração de GPIOs, inicialização do ADC, I2C (Display), PIO (Matriz LED) e UART.
-2. **Aquisição de Dados (`ler_sensores`)**: Leitura dos canais ADC e pinos digitais. Implementa lógica de *debounce* para botões.
-3. **Processamento Lógico (`processar_decisoes`)**: O "Cérebro". Avalia os dados contra os *setpoints* (ex: TEMP_MAX = 28.0°C) e define o estado futuro dos atuadores.
-4. **Atuação (`atualizar_atuadores`)**: Aplica os estados calculados aos pinos de saída (Relés, Buzzer, LEDs).
-5. **Comunicação (`enviar_telemetria_wifi` / `atualizar_display_local`)**: Formata os dados em JSON e envia via UART, além de atualizar o display I2C.
+1. **Inicialização do Sistema (`setup_hardware`)**: Rotina executada no *boot*. Configura a direção dos pinos GPIO, inicializa os conversores analógico-digitais (ADC), configura o barramento I2C para o display, inicializa a máquina PIO para a matriz de LEDs e configura a porta UART.
+2. **Aquisição de Dados (`ler_sensores`)**: Função chamada a cada iteração do loop. Realiza a leitura sequencial dos canais ADC e dos pinos digitais. Inclui a lógica de *debounce* em software para garantir a leitura limpa dos botões.
+3. **Processamento Lógico (`processar_decisoes`)**: O núcleo de inteligência do sistema. Compara as leituras atuais dos sensores com os *setpoints* definidos (ex: `TEMP_MAX = 28.0°C`, `UMIDADE_MIN = 75%`) e determina o estado booleano futuro de cada atuador.
+4. **Atuação Física (`atualizar_atuadores`)**: Aplica os estados lógicos calculados na etapa anterior aos pinos GPIO correspondentes aos relés, LEDs e Buzzer.
+5. **Comunicação e Interface (`enviar_telemetria_wifi` e `atualizar_display_local`)**: Formata as variáveis de estado em uma *string* JSON utilizando `snprintf` e a transmite via `uart_puts`. Simultaneamente, atualiza o *buffer* de vídeo do display OLED via I2C.
 
-## f. Fluxograma
+## f. Fluxograma do Sistema
+
+O diagrama abaixo ilustra o fluxo de execução principal do firmware embarcado:
 
 ```mermaid
 graph TD
-    A[Início] --> B[setup_hardware]
+    A[Início / Boot] --> B[setup_hardware: Inicializa GPIO, ADC, I2C, UART]
     B --> C[Loop Principal 1Hz]
-    C --> D[ler_sensores]
-    D --> E{Modo Auto?}
-    E -- Sim --> F[processar_decisoes]
-    E -- Não --> G[Controle Manual]
-    F --> H[atualizar_atuadores]
+    C --> D[ler_sensores: ADC e GPIO]
+    D --> E{Modo Automático?}
+    E -- Sim --> F[processar_decisoes: Avalia Setpoints]
+    E -- Não --> G[Controle Manual via Botões]
+    F --> H[atualizar_atuadores: Aciona Relés e Buzzer]
     G --> H
-    H --> I[enviar_telemetria_wifi]
-    I --> J[atualizar_display_local]
+    H --> I[enviar_telemetria_wifi: Transmite JSON via UART]
+    I --> J[atualizar_display_local: Atualiza OLED e Matriz]
     J --> C
 ```
 
 ## g. Indicação do uso de IA
 
-Ferramentas de Inteligência Artificial (Manus AI / Google AntiGravity) foram utilizadas neste projeto para:
-- Auxílio na estruturação do código C e resolução de conflitos de pinagem (ADC).
-- Geração de documentação técnica (README e Relatório Técnico).
-- Revisão de boas práticas de programação para sistemas embarcados (Pico SDK).
-- O código lógico central e a arquitetura do sistema são de autoria própria, baseados nos requisitos do programa EmbarcaTech.
+Durante o desenvolvimento deste projeto, ferramentas de Inteligência Artificial (Manus AI / Google AntiGravity) foram utilizadas como assistentes de engenharia de software para as seguintes finalidades:
+- Auxílio na estruturação inicial do código em C e na resolução de conflitos de roteamento de pinos (especificamente na realocação dos canais ADC da placa BitDogLab).
+- Geração e formatação da documentação técnica (README.md e este Relatório Técnico) seguindo padrões acadêmicos.
+- Revisão de boas práticas de programação aplicadas a sistemas embarcados utilizando o Pico SDK.
+Ressalta-se que a lógica de controle central, a definição da arquitetura do sistema e a concepção do projeto FarmTech são de autoria própria, desenvolvidas para atender aos requisitos do programa EmbarcaTech.
 
 ## h. Conclusão
 
-O projeto FarmTech demonstrou com sucesso a viabilidade de um sistema embarcado de baixo custo para controle ambiental em estufas hidropônicas. A utilização da placa BitDogLab v3 (RP2040) provou ser robusta o suficiente para gerenciar múltiplos sensores analógicos e digitais, além de controlar atuadores de forma autônoma.
+O projeto FarmTech demonstrou com êxito a viabilidade técnica da implementação de um sistema embarcado de baixo custo para o controle ambiental preciso em estufas hidropônicas. A utilização da plataforma BitDogLab v3, baseada no microcontrolador RP2040, provou ser robusta e adequada para o gerenciamento simultâneo de múltiplos sensores analógicos e digitais, bem como para o controle autônomo de atuadores de potência.
 
 **Resultados Alcançados:**
-- Leitura estável de sensores e atuação correta dos relés baseada na lógica de controle.
-- Interface local funcional (Display OLED e Matriz de LEDs).
-- Telemetria JSON formatada corretamente via UART.
+- Leitura estável e confiável dos sensores, com atuação correta dos relés baseada na lógica de controle climático e hídrico.
+- Interface local plenamente funcional, fornecendo *feedback* visual imediato através do Display OLED e da Matriz de LEDs.
+- Geração e transmissão correta de telemetria em formato JSON via UART, validando a prontidão do sistema para integração IoT.
 
 **Dificuldades Enfrentadas:**
-- Conflitos de pinagem do ADC na placa BitDogLab, resolvidos através de realocação de pinos (GP28/GP29).
-- Implementação de *fallback* para sensores ausentes (uso do Joystick para simular temperatura e umidade).
+- O principal desafio técnico envolveu conflitos de pinagem do ADC na placa BitDogLab, que foram solucionados através da realocação estratégica dos pinos (GP28 e GP29) para os sensores LDR e de Nível de Água.
+- A necessidade de garantir a continuidade dos testes na ausência de sensores físicos específicos levou à implementação bem-sucedida de um sistema de *fallback*, utilizando o Joystick da placa para simular variações de temperatura e umidade.
 
 **Melhorias Futuras:**
-- Integração completa do módulo Wi-Fi (CYW43439) para envio direto de dados via MQTT.
-- Implementação de um dashboard web para visualização remota da telemetria.
-- Adição de sensores de pH e Condutividade Elétrica (EC) para controle preciso da solução nutritiva.
+- Integração completa do módulo Wi-Fi (CYW43439) nativo da placa Pico W para o envio direto de dados via protocolo MQTT para um *broker* na nuvem.
+- Desenvolvimento de um *dashboard* web ou aplicativo mobile para a visualização remota da telemetria e controle manual à distância.
+- Adição de sensores de pH e Condutividade Elétrica (EC) para permitir o controle automatizado e preciso da dosagem da solução nutritiva na hidroponia.
