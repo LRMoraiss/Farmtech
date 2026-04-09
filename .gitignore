@@ -34,3 +34,6 @@ Makefile
 # Temporary files
 *.tmp
 *.log
+
+# Credenciais WiFi (nunca versionar)
+include/config.h

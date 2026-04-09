@@ -1,104 +1,164 @@
-# FarmTech: Domo Geodésico Autônomo para o Sertão
+# 🌱 FarmTech — Sistema Autônomo de Cultivo Hidropônico
 
-![Domo Geodésico FarmTech - Arquitetura Completa](domo_farmtech.png)
+[![EmbarcaTech](https://img.shields.io/badge/EmbarcaTech-2026-green)]()
+[![Pico W](https://img.shields.io/badge/Raspberry_Pi-Pico_W-red)]()
+[![C](https://img.shields.io/badge/Linguagem-C-blue)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)]()
 
-## 1. Apresentação do Projeto
+### Descrição
 
-O **FarmTech** é um sistema embarcado autônomo de controle ambiental projetado para cultivo hidropônico em **domos geodésicos no Sertão Brasileiro**. Desenvolvido como **Projeto Final do programa EmbarcaTech**, o sistema utiliza a placa **BitDogLab v3** (baseada no microcontrolador Raspberry Pi Pico W - RP2040) para atuar como a Unidade Central de Controle.
+O projeto FarmTech é um sistema embarcado autônomo projetado para otimizar o cultivo hidropônico em domos geodésicos no Sertão Brasileiro. A agricultura no semiárido enfrenta desafios climáticos severos, e esta solução tecnológica visa criar um microclima controlado para garantir resiliência e eficiência na produção agrícola.
 
-### O Problema
-A agricultura no semiárido nordestino enfrenta desafios severos: escassez hídrica, altas temperaturas, baixa umidade relativa do ar e intensa radiação solar. O cultivo tradicional a céu aberto frequentemente resulta em perda de safra e uso ineficiente da pouca água disponível.
+O sistema atua como a Unidade Central de Controle (UCC), monitorando continuamente variáveis ambientais críticas como temperatura, umidade, luminosidade e nível d'água. Com base nessas leituras, o FarmTech toma decisões autônomas para acionar atuadores (ventilação, nebulização, iluminação e bombas), mantendo as condições ideais de cultivo.
 
-### A Solução Proposta
-O FarmTech resolve esse problema criando um microclima controlado dentro de um domo geodésico. O sistema monitora continuamente o ambiente e toma decisões autônomas para manter condições ideais de cultivo, protegendo as plantas do clima extremo e otimizando o uso de água através da hidroponia de circuito fechado.
+Desenvolvido para a plataforma BitDogLab v3 (baseada no Raspberry Pi Pico W), o firmware foi escrito inteiramente em linguagem C utilizando o Pico SDK 2.x. O sistema oferece uma interface local completa (Display OLED, Matriz de LEDs, Buzzer) e controle remoto via WiFi através de um dashboard web responsivo.
 
-## 2. Objetivos
+### Funcionalidades
 
-### Objetivo Geral
-Desenvolver um sistema embarcado de baixo custo e alta eficiência para automação de estufas hidropônicas no semiárido, utilizando a plataforma RP2040.
+- Menu interativo no OLED 128x64 com 7 telas navegáveis por joystick
+- Lógica de controle automático com 3 receitas de cultivo (Morango, Alface, Tomate)
+- Servidor HTTP com dashboard web responsivo — acesse pelo celular na mesma rede
+- Controle remoto de atuadores via navegador (GET /cmd)
+- IRQ nos botões com detecção de pressão curta e longa
+- Matriz WS2812B 5x5 com padrões visuais por estado do sistema
+- LED RGB PWM com 5 estados de cor
+- Buzzer com alertas sonoros e melodia de boot
+- DHT22 real com fallback automático para joystick em caso de falha
+- Histórico circular de até 5 alertas com timestamp
+- WiFi com fallback offline (sistema funciona sem rede)
 
-### Objetivos Específicos
-- Monitorar em tempo real variáveis críticas: temperatura, umidade, luminosidade e nível de água.
-- Controlar atuadores (ventilação, nebulização, iluminação e bombas) de forma autônoma baseada em setpoints pré-definidos.
-- Fornecer interface local (Display OLED e Matriz de LEDs) para diagnóstico rápido.
-- Transmitir dados de telemetria via comunicação serial/Wi-Fi para monitoramento remoto (IoT).
-- Garantir resiliência do sistema com modos de fallback em caso de falha de sensores.
+### Hardware
 
-## 3. Requisitos Funcionais
+**Componentes nativos da BitDogLab:**
 
-O sistema foi projetado para atender aos seguintes requisitos:
-- **Leitura de Sensores**: Aquisição de dados analógicos (ADC) e digitais a cada 1 segundo.
-- **Controle Autônomo**: Acionamento de relés baseado em regras lógicas de clima e hidratação.
-- **Modo Manual/Auto**: Alternância de modo de operação via interrupção de botão (Botão A).
-- **Interface Visual**: Exibição de status na Matriz de LEDs WS2812B e Display Gráfico OLED (I2C).
-- **Alertas Críticos**: Acionamento de alarme sonoro (Buzzer) em condições extremas (Temp > 35°C ou Água < 5%).
-- **Telemetria**: Envio de dados formatados em JSON via interface UART.
+| Componente | Pino | Função |
+|---|---|---|
+| Display OLED SSD1306 | GP14/GP15 (I2C1) | Menu interativo e dashboard local |
+| Joystick analógico X/Y | GP26/GP27 (ADC0/1) | Navegação + simulação de sensores |
+| Botão A | GP5 (IRQ) | Selecionar/confirmar |
+| Botão B | GP6 (IRQ) | Voltar/cancelar |
+| Joystick SW | GP22 (IRQ) | Entrar no menu |
+| Matriz WS2812B 5x5 | GP7 (PIO) | Indicação visual dos atuadores |
+| LED RGB | GP11/GP12/GP13 (PWM) | Status geral do sistema |
+| Buzzer passivo | GP21 (PWM) | Alertas e melodia de boot |
+| WiFi CYW43 | interno | Servidor HTTP e controle remoto |
 
-## 4. Arquitetura de Hardware
+**Sensores externos (conectar via expansão IDC):**
 
-A BitDogLab v3 atua como o cérebro do sistema, integrando os seguintes componentes:
+| Sensor | Pino | Função |
+|---|---|---|
+| DHT22 | GP4 (1-Wire) | Temperatura e umidade reais |
+| LDR + resistor 10kΩ | GP26 (ADC0) | Luminosidade ambiente |
+| Sensor capacitivo nível | GP28 (ADC2) | Nível do reservatório d'água |
 
-### Microcontrolador
-- **Raspberry Pi Pico W (RP2040)**: Processador dual-core ARM Cortex-M0+, responsável por toda a lógica de controle.
+### Setpoints de Controle
 
-### Sensores (Entradas)
-- **DHT22 (GP4)**: Monitoramento digital de temperatura e umidade interna. *(Fallback implementado via Joystick ADC0/ADC1 para simulação/resiliência)*.
-- **LDR (GP28 - ADC2)**: Sensor analógico de luz ambiente para controle de fotossíntese.
-- **Sensor de Nível (GP29 - ADC3)**: Monitoramento analógico do reservatório de água/nutrientes.
-- **Botões (GP5/GP6)**: Entradas digitais com *pull-up* para controle de interface.
+| Parâmetro | Limite | Ação |
+|---|---|---|
+| Temperatura | > 28°C | Liga ventilação + nebulização |
+| Temperatura crítica | > 35°C | Buzzer + alerta vermelho |
+| Umidade | < 75% | Liga nebulizador |
+| Nível d'água | < 20% | Liga bomba |
+| Luminosidade | < 30% | Liga Grow Lights |
 
-### Atuadores e Interfaces (Saídas)
-- **Relés de Controle (GP8 a GP12)**: Controle de potência para Exaustor, Entrada de Ar, Nebulizador, Grow Lights e Bomba d'Água.
-- **Display OLED (GP14/GP15 - I2C1)**: Interface gráfica local para exibição de telemetria.
-- **Matriz WS2812B (GP7)**: Feedback visual rápido do status do sistema.
-- **Buzzer (GP13)**: Alertas sonoros de criticidade.
+### Receitas de Cultivo
 
-### Comunicação
-- **Interface UART (GP0/GP1 - UART0)**: Transmissão de telemetria para módulos externos ou debug.
+| Receita | Temp. Máx | Umidade Mín | Luz Mín | Água Mín |
+|---|---|---|---|---|
+| Morango | 28°C | 75% | 30% | 20% |
+| Alface | 25°C | 85% | 50% | 30% |
+| Tomate | 32°C | 60% | 80% | 15% |
 
-## 5. Arquitetura do Firmware
+### Dashboard Web
 
-O software embarcado foi desenvolvido em **C/C++ utilizando o Pico SDK**, estruturado em um loop infinito de controle (Padrão *Super Loop* com Interrupções):
+```
+Acesse: http://<IP-da-placa>/
+O IP aparece no display OLED após conexão WiFi.
+```
+- Mostra temperatura, umidade, nível d'água e luminosidade em tempo real
+- Botões para ligar/desligar cada atuador (modo MANUAL)
+- Alterna entre modo AUTO e MANUAL
+- Atualiza automaticamente a cada 2 segundos
 
-1. **Inicialização (`setup_hardware`)**: Configuração de GPIOs, inicialização do ADC, I2C (Display), PIO (Matriz LED) e UART.
-2. **Aquisição de Dados (`ler_sensores`)**: Leitura dos canais ADC e pinos digitais. Implementa lógica de *debounce* para botões.
-3. **Processamento Lógico (`processar_decisoes`)**: O "Cérebro". Avalia os dados contra os *setpoints* (ex: TEMP_MAX = 28.0°C) e define o estado futuro dos atuadores.
-4. **Atuação (`atualizar_atuadores`)**: Aplica os estados calculados aos pinos de saída (Relés, Buzzer, LEDs).
-5. **Comunicação (`enviar_telemetria_wifi` / `atualizar_display_local`)**: Formata os dados em JSON e envia via UART, além de atualizar o display I2C.
+### Instalação e Compilação
 
-## 6. Compilação e Execução
-
-### Pré-requisitos
-- Raspberry Pi Pico SDK (v2.1.0 ou superior)
-- CMake (3.13+)
-- Compilador ARM GCC (`arm-none-eabi-gcc`)
-- Ninja Build (opcional, recomendado)
-
-### Passos para Compilar
 ```bash
-mkdir build
-cd build
-cmake -G Ninja ..
-ninja
+# 1. Clone o repositório
+git clone https://github.com/LRMoraiss/FarmTech.git
+cd FarmTech
+
+# 2. Configure as credenciais WiFi
+cp include/config.h.example include/config.h
+# Edite include/config.h com seu SSID e senha
+
+# 3. Compile (requer Pico SDK 2.x e arm-none-eabi-gcc)
+mkdir build && cd build
+cmake .. -DPICO_BOARD=pico_w
+make
+
+# 4. Grave na placa
+# Segure BOOTSEL, conecte USB, solte BOOTSEL
+# Arraste build/farmtech.uf2 para a unidade RPI-RP2
 ```
 
-### Instalação na Placa (BitDogLab)
-1. Conecte a placa via USB mantendo o botão **BOOTSEL** pressionado.
-2. A placa será montada como um pendrive (`RPI-RP2`).
-3. Arraste o arquivo `farmtech_sim.uf2` (gerado na pasta build) para dentro do pendrive.
-4. A placa reiniciará automaticamente executando o firmware.
+### Dependências
 
-## 7. Indicação de Uso de IA
+- Raspberry Pi Pico SDK 2.x
+- arm-none-eabi-gcc (ARM cross-compiler)
+- CMake 3.13+
+- Ninja ou Make
 
-Ferramentas de Inteligência Artificial (Manus AI / Google AntiGravity) foram utilizadas neste projeto para:
-- Auxílio na estruturação do código C e resolução de conflitos de pinagem (ADC).
-- Geração de documentação técnica (README e Relatório Técnico).
-- Revisão de boas práticas de programação para sistemas embarcados (Pico SDK).
-- O código lógico central e a arquitetura do sistema são de autoria própria, baseados nos requisitos do programa EmbarcaTech.
+### Estrutura do Projeto
 
-## 8. Licença e Créditos
+```
+FarmTech/
+├── src/farmtech.c      # Firmware principal (~900 linhas)
+├── include/
+│   ├── lwipopts.h      # Configuração lwIP (TCP/IP)
+│   └── config.h.example # Template de credenciais WiFi
+├── pio/ws2812.pio      # Programa PIO para matriz de LEDs
+├── CMakeLists.txt      # Configuração de build
+└── README.md
+```
 
-- **Autor**: Luciano Morais
-- **Programa**: EmbarcaTech (Projeto Final)
-- **Licença**: MIT License
-- **Bibliotecas Utilizadas**: Pico SDK Standard Libraries, hardware_adc, hardware_i2c, hardware_pio.
+### Arquitetura do Firmware
+
+Breve descrição das 17 seções do código:
+- Seções 1-3: Configuração, tipos e variáveis globais
+- Seção 4: Driver OLED SSD1306 (framebuffer + fonte 5x7, sem biblioteca externa)
+- Seção 5: DHT22 bit-bang com timeout por time_us_32()
+- Seção 6: IRQ dos botões (pressão curta/longa, debounce por tempo)
+- Seção 7: Servidor HTTP WiFi (lwIP poll mode, rotas /, /status, /cmd)
+- Seções 8-10: Setup hardware, leitura de sensores, lógica de decisão
+- Seções 11-12: LED RGB PWM, Matriz WS2812B PIO
+- Seções 13-14: Menu OLED (FSM 7 estados), renderização
+- Seções 15-17: Serial debug, melodia boot, main loop
+
+### Uso de Inteligência Artificial
+
+```
+Este projeto foi desenvolvido por Luciano Rodrigues de Morais com suporte
+de ferramentas de IA como assistentes de código:
+
+- Claude (Anthropic) — suporte em código C embarcado e documentação
+- Google Gemini — pesquisa técnica e geração de imagens
+- Manus — reorganização e estruturação do repositório
+- Google AntiGravity — ambiente de desenvolvimento e compilação
+
+A autoria intelectual, decisões de arquitetura, testes físicos na placa
+e validação do sistema são de responsabilidade do autor.
+```
+
+### Licença
+
+```
+MIT License — veja LICENSE para detalhes.
+```
+
+### Autor
+
+```
+Luciano Rodrigues de Morais
+EmbarcaTech — Expansão em Sistemas Embarcados
+Fortaleza, CE — Abril 2026
+```

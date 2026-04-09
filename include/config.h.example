@@ -1,0 +1,14 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// ============================================================================
+// Configurações de Rede Wi-Fi
+// ============================================================================
+// Renomeie este arquivo para config.h e insira suas credenciais reais.
+// O arquivo config.h deve ser ignorado pelo Git (.gitignore).
+
+#define WIFI_SSID "SUA_REDE_AQUI"
+#define WIFI_SENHA "SUA_SENHA_AQUI"
+#define WIFI_TIMEOUT_MS 10000
+
+#endif // CONFIG_H
