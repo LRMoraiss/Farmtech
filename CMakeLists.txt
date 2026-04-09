@@ -1,34 +1,36 @@
 cmake_minimum_required(VERSION 3.13)
-
-# Inicializa o SDK do Pico
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
-project(farmtech_sim C CXX ASM)
-
-# Define o padrão C
+project(farmtech C CXX ASM)
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(PICO_BOARD pico_w)
 
-# Inicializa o Pico SDK
 pico_sdk_init()
 
-# Cria o executável principal
-add_executable(farmtech_sim
-    farmtech_sim.c
+add_executable(farmtech farmtech.c)
+
+# Headers locais + PIO gerado (build/)
+target_include_directories(farmtech PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-# Link com as bibliotecas necessárias
-target_link_libraries(farmtech_sim
+# PIO — Geração automática do header ws2812.pio.h
+pico_generate_pio_header(farmtech ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio)
+
+# Bibliotecas do Pico SDK (WiFi nativo Pico W, modo poll)
+target_link_libraries(farmtech
     pico_stdlib
+    pico_cyw43_arch_lwip_poll
     hardware_adc
     hardware_i2c
     hardware_pio
+    hardware_pwm
+    hardware_timer
     hardware_clocks
 )
 
-# Habilita saída USB para debug
-pico_enable_stdio_usb(farmtech_sim 1)
-pico_enable_stdio_uart(farmtech_sim 0)
-
-# Gera arquivos UF2 para upload
-pico_add_uf2_output(farmtech_sim)
+pico_enable_stdio_usb(farmtech 1)
+pico_enable_stdio_uart(farmtech 0)
+pico_add_extra_outputs(farmtech)

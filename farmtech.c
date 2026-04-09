@@ -58,12 +58,8 @@
 #define OLED_ADDR 0x3C
 #define I2C_FREQ 400000
 
-/* --- Setpoints de controle --- */
-#define TEMP_MAX 28.0f
+/* --- Alarme de Emergência (Fixo) --- */
 #define TEMP_CRITICA 35.0f
-#define UMIDADE_MIN 75
-#define NIVEL_AGUA_MIN 20
-#define LUZ_MINIMA 30
 
 /* --- WiFi --- */
 #define WIFI_SSID "brisa-2218544"
@@ -108,7 +104,8 @@ typedef enum {
   TELA_SENSORES,
   TELA_DADOS_LIVE,
   TELA_ATUADORES,
-  TELA_ALERTAS
+  TELA_ALERTAS,
+  TELA_RECEITAS
 } TelaAtual;
 
 typedef struct {
@@ -134,9 +131,30 @@ static int nivel_agua_atual = 100;
 static int luz_ambiente_atual = 100;
 
 static bool sensor_dht22_ativo = true;
-static bool sensor_ldr_ativo = true; /* Reativado no pino 26 (livre de conflito Wi-Fi) */
+static bool sensor_ldr_ativo = true;
 static bool sensor_agua_ativo = true;
 static bool dht22_ok = false;
+
+/* --- Setpoints Dinâmicos (Receitas de Cultivo) --- */
+static int receita_atual = 0; /* 0: Morango, 1: Alface, 2: Tomate */
+static float sp_temp_max = 28.0f;
+static int sp_umi_min = 75;
+static int sp_luz_min = 30;
+static int sp_agua_min = 20;
+
+typedef struct {
+  const char *nome;
+  float t_max;
+  int u_min;
+  int l_min;
+  int a_min;
+} ReceitaPlantio;
+
+static const ReceitaPlantio receitas_preset[3] = {
+    {"Morango", 28.0f, 75, 30, 20}, /* Padrão misto */
+    {"Alface", 25.0f, 85, 50, 30},  /* Frio/Úmido */
+    {"Tomate", 32.0f, 60, 80, 15}   /* Quente/Seco */
+};
 
 /* --- Atuadores --- */
 static bool status_vent = false;
@@ -683,26 +701,8 @@ static err_t http_accept_cb(void *arg, struct tcp_pcb *newpcb, err_t err) {
 
 /* --- Inicializa WiFi CYW43 nativo e servidor TCP na porta 80 --- */
 static bool wifi_init(void) {
-  if (cyw43_arch_init()) {
-    printf("[WIFI] Falha ao inicializar CYW43\n");
-    return false;
-  }
-  cyw43_arch_enable_sta_mode();
-
-  printf("[WIFI] Conectando a '%s' (Async)...\n", WIFI_SSID);
-  cyw43_arch_wifi_connect_async(WIFI_SSID, WIFI_SENHA, CYW43_AUTH_WPA2_AES_PSK);
-  strcpy(ip_str, "Conectando...");
-
-  struct tcp_pcb *pcb = tcp_new();
-  if (!pcb) return false;
-  err_t berr = tcp_bind(pcb, IP_ADDR_ANY, HTTP_PORT);
-  if (berr != ERR_OK) { tcp_close(pcb); return false; }
-  http_pcb = tcp_listen(pcb);
-  if (!http_pcb) return false;
-  tcp_accept(http_pcb, http_accept_cb);
-
-  printf("[WIFI] Servidor HTTP ativo na porta %d\n", HTTP_PORT);
-  return true;
+  /* PLACA STANDARD DETECTADA: BYPASS DO WI-FI PARA EVITAR CONGELAMENTO */
+  return false;
 }
 
 /* ============================================================================
@@ -808,18 +808,20 @@ static void ler_sensores(void) {
     }
   }
 
-  /* LDR — luminosidade (inversão: mais luz = menor resistência) */
+  /* LDR — luminosidade simulada via MOCK FÍSICO (Joystick Eixo X no ADC0 / GP26) 
+   * Centro do joystick (2048) = ~50%
+   * Empurrar para a Esquerda/Direita afeta o mock de luz interativamente. */
   if (sensor_ldr_ativo) {
-    adc_select_input(0); /* ADC0 = GP26 */
-    luz_ambiente_atual = 100 - (int)((adc_read() / 4095.0f) * 100.0f);
-    if (luz_ambiente_atual < 0)
-      luz_ambiente_atual = 0;
+    adc_select_input(0); /* ADC0 (Eixo X do Joystick) */
+    luz_ambiente_atual = (int)((adc_read() / 4095.0f) * 100.0f);
   }
 
-  /* Nível de água capacitivo */
+  /* Nível de água simulado via MOCK FÍSICO (Joystick Eixo Y no ADC1 / GP27) 
+   * Centro do joystick (2048) = ~50%
+   * Empurrar para Cima/Baixo afeta a água (0% a 100%) interativamente. */
   if (sensor_agua_ativo) {
-    adc_select_input(2); /* ADC2 = GP28 */
-    nivel_agua_atual = (int)((adc_read() / 4095.0f) * 100.0f);
+    adc_select_input(1); /* ADC1 (Eixo Y do Joystick) */
+    nivel_agua_atual = 100 - (int)((adc_read() / 4095.0f) * 100.0f); /* invertido (cima = cheio) */
   }
 }
 
@@ -853,17 +855,17 @@ static void processar_decisoes(void) {
   }
   alerta_critico = novo_critico;
 
-  /* Modo automático: aplica regras de setpoints */
+  /* Modo automático: aplica regras dinâmicas da receita ativa */
   if (modo_automatico) {
-    if (temperatura_atual > TEMP_MAX) {
+    if (temperatura_atual > sp_temp_max) {
       status_vent = true;
       status_neb = (umidade_atual < 85);
     } else {
       status_vent = false;
-      status_neb = (umidade_atual < UMIDADE_MIN);
+      status_neb = (umidade_atual < sp_umi_min);
     }
-    status_bomba = (nivel_agua_atual < NIVEL_AGUA_MIN);
-    status_grow = (luz_ambiente_atual < LUZ_MINIMA);
+    status_bomba = (nivel_agua_atual < sp_agua_min);
+    status_grow = (luz_ambiente_atual < sp_luz_min);
   }
 }
 
@@ -905,7 +907,7 @@ static void atualizar_atuadores(void) {
     /* Azul piscando = modo MANUAL */
     manual_blink = !manual_blink;
     led_rgb_set(0, 0, manual_blink ? 180 : 0);
-  } else if (temperatura_atual > 25.0f && temperatura_atual <= TEMP_MAX) {
+  } else if (temperatura_atual > 25.0f && temperatura_atual <= sp_temp_max) {
     /* Amarelo = atenção */
     led_rgb_set(255, 180, 0);
   } else if (!wifi_conectado) {
@@ -924,7 +926,7 @@ static void atualizar_atuadores(void) {
       buzzer_set_freq(buzz_on_phase ? BUZZ_FREQ_CRIT : 0);
       buzz_next_toggle_ms = agora + 200;
     }
-  } else if (temperatura_atual > TEMP_MAX) {
+  } else if (temperatura_atual > sp_temp_max) {
     /* Bip 500Hz: 100ms on / 900ms off */
     if (agora >= buzz_next_toggle_ms) {
       buzz_on_phase = !buzz_on_phase;
@@ -1038,11 +1040,13 @@ static bool poll_joystick(uint32_t agora) {
 static int menu_max_cursor(void) {
   switch (tela_atual) {
   case TELA_MENU_PRINCIPAL:
-    return 4;
+    return 5;
   case TELA_SENSORES:
     return 2;
   case TELA_ATUADORES:
     return 3;
+  case TELA_RECEITAS:
+    return 2;
   case TELA_ALERTAS:
     return (qtd_alertas > 1) ? qtd_alertas - 1 : 0;
   default:
@@ -1100,6 +1104,10 @@ static void atualizar_menu(void) { // NOSONAR
         cursor_menu = 0;
         break;
       case 4:
+        tela_atual = TELA_RECEITAS;
+        cursor_menu = 0;
+        break;
+      case 5:
         modo_automatico = !modo_automatico;
         break;
       default:
@@ -1119,6 +1127,15 @@ static void atualizar_menu(void) { // NOSONAR
       if (!modo_automatico && cursor_menu == 1) status_neb = !status_neb;
       if (!modo_automatico && cursor_menu == 2) status_bomba = !status_bomba;
       if (!modo_automatico && cursor_menu == 3) status_grow = !status_grow;
+      break;
+    case TELA_RECEITAS:
+      if (cursor_menu >= 0 && cursor_menu <= 2) {
+        receita_atual = cursor_menu;
+        sp_temp_max = receitas_preset[cursor_menu].t_max;
+        sp_umi_min = receitas_preset[cursor_menu].u_min;
+        sp_luz_min = receitas_preset[cursor_menu].l_min;
+        sp_agua_min = receitas_preset[cursor_menu].a_min;
+      }
       break;
     default:
       break;
@@ -1199,8 +1216,9 @@ static void render_dashboard(void) {
   snprintf(b, sizeof(b), "V:%d N:%d B:%d G:%d", status_vent, status_neb,
            status_bomba, status_grow);
   oled_str(0, 4, b);
-  snprintf(b, sizeof(b), "%s %s DHT:%s", modo_automatico ? "AUTO" : "MAN",
-           alerta_critico ? "!CRIT" : "OK", dht22_ok ? "OK" : "SIM");
+  snprintf(b, sizeof(b), "%s[%s] %s %s", modo_automatico ? "AUT" : "MAN",
+           receitas_preset[receita_atual].nome,
+           alerta_critico ? "!CRIT" : "OK", dht22_ok ? "OK " : "SIM ");
   oled_str(0, 5, b);
   oled_hline(54);
   oled_str(0, 7, wifi_conectado ? "[SW/A] Menu" : "[SW/A] Menu WiFi:OFF");
@@ -1217,9 +1235,12 @@ static void render_menu_principal(void) {
   oled_str(0, 3, b);
   snprintf(b, sizeof(b), "%c 4.Historico", cursor_menu == 3 ? '>' : ' ');
   oled_str(0, 4, b);
-  snprintf(b, sizeof(b), "%c 5.Modo:%s", cursor_menu == 4 ? '>' : ' ',
-           modo_automatico ? "AUTO" : "MANUAL");
+  snprintf(b, sizeof(b), "%c 5.Receitas [%s]", cursor_menu == 4 ? '>' : ' ',
+           receitas_preset[receita_atual].nome);
   oled_str(0, 5, b);
+  snprintf(b, sizeof(b), "%c 6.Modo:%s", cursor_menu == 5 ? '>' : ' ',
+           modo_automatico ? "AUTO" : "MANUAL");
+  oled_str(0, 6, b);
   oled_str(0, 7, "[Joy]Nav [A]OK [B]Volta");
 }
 
@@ -1308,6 +1329,20 @@ static void render_alertas(void) {
   oled_str(0, 7, "[Blong]Limpar [B]Volta");
 }
 
+static void render_receitas(void) {
+  char b[32];
+  oled_str(6, 0, "=== SELEC. RECEITA ===");
+  oled_str(0, 1, "Ajusta limites AUTO:");
+  for (int i = 0; i < 3; i++) {
+    snprintf(b, sizeof(b), "%c %d.%s %s",
+             (cursor_menu == i) ? '>' : ' ',
+             i + 1, receitas_preset[i].nome,
+             (receita_atual == i) ? "[ON]" : "");
+    oled_str(0, 3 + i, b);
+  }
+  oled_str(0, 7, "[A]Aplicar [B]Voltar");
+}
+
 static void atualizar_oled(void) {
   oled_clear();
   switch (tela_atual) {
@@ -1328,6 +1363,9 @@ static void atualizar_oled(void) {
     break;
   case TELA_ALERTAS:
     render_alertas();
+    break;
+  case TELA_RECEITAS:
+    render_receitas();
     break;
   }
   oled_flush();
