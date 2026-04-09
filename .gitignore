@@ -34,3 +34,5 @@ Makefile
 # Temporary files
 *.tmp
 *.log
+
+config.h

@@ -1,0 +1,8 @@
+/* config.h.example — copie para config.h e preencha com seus dados */
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#define WIFI_SSID  "SUA_REDE_AQUI"
+#define WIFI_SENHA "SUA_SENHA_AQUI"
+
+#endif

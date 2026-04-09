@@ -27,6 +27,7 @@
 #include "lwip/tcp.h"
 #include "pico/cyw43_arch.h"
 #include "ws2812.pio.h"
+#include "config.h"
 
 /* ============================================================================
  * 1. DEFINES — Pinos, setpoints, temporização, WiFi
@@ -62,8 +63,6 @@
 #define TEMP_CRITICA 35.0f
 
 /* --- WiFi --- */
-#define WIFI_SSID "brisa-2218544"
-#define WIFI_SENHA "uubrz3zp"
 #define WIFI_TIMEOUT_MS 10000
 #define HTTP_PORT 80
 
@@ -76,7 +75,6 @@
 #define JOY_THRESHOLD 800
 #define JOY_CENTER 2048
 #define LOOP_DELAY_MS 50
-#define DHT_TIMEOUT 10000 /* iterações máx. no bit-bang */
 #define SENSOR_READ_INTERVAL_MS 2000
 
 /* --- Alertas --- */
@@ -377,68 +375,65 @@ static void oled_hline(int y) {
  */
 
 static bool dht22_read(float *temp, float *hum) {
-  uint8_t data[5] = {0};
+    uint8_t data[5] = {0};
+    uint32_t t_start;
 
-  /* Sinal de start: LOW 1ms, HIGH 30µs, depois input com pull-up */
-  gpio_set_dir(DHT22_PIN, GPIO_OUT);
-  gpio_put(DHT22_PIN, 0);
-  sleep_ms(1);
-  gpio_put(DHT22_PIN, 1);
-  sleep_us(30);
-  gpio_set_dir(DHT22_PIN, GPIO_IN);
-  gpio_pull_up(DHT22_PIN);
+    /* Sinal de start: LOW 1ms, HIGH 30µs, depois input com pull-up */
+    gpio_set_dir(DHT22_PIN, GPIO_OUT);
+    gpio_put(DHT22_PIN, 0);
+    sleep_ms(1);
+    gpio_put(DHT22_PIN, 1);
+    sleep_us(30);
+    gpio_set_dir(DHT22_PIN, GPIO_IN);
+    gpio_pull_up(DHT22_PIN);
 
-  /* Aguarda resposta do DHT22: LOW ~80µs */
-  uint32_t cnt = 0;
-  while (gpio_get(DHT22_PIN) == 1) {
-    if (++cnt > DHT_TIMEOUT)
-      return false;
-  }
-  cnt = 0;
-  while (gpio_get(DHT22_PIN) == 0) {
-    if (++cnt > DHT_TIMEOUT)
-      return false;
-  }
-  /* HIGH ~80µs */
-  cnt = 0;
-  while (gpio_get(DHT22_PIN) == 1) {
-    if (++cnt > DHT_TIMEOUT)
-      return false;
-  }
-
-  /* Lê 40 bits (5 bytes) */
-  for (int i = 0; i < 40; i++) {
-    /* LOW ~50µs (início de cada bit) */
-    cnt = 0;
-    while (gpio_get(DHT22_PIN) == 0) {
-      if (++cnt > DHT_TIMEOUT)
-        return false;
-    }
-    /* HIGH: duração determina bit 0 (26µs) ou bit 1 (70µs) */
-    /* Amostra após ~40µs: se ainda HIGH → bit 1 */
-    uint32_t high_cnt = 0;
+    /* Aguarda LOW do sensor (máx 100µs) */
+    t_start = time_us_32();
     while (gpio_get(DHT22_PIN) == 1) {
-      high_cnt++;
-      if (high_cnt > DHT_TIMEOUT)
-        return false;
+        if ((time_us_32() - t_start) > 100) return false;
     }
-    data[i / 8] <<= 1;
-    if (high_cnt > 40) {
-      data[i / 8] |= 1; /* bit 1 (HIGH longo) */
+    /* Aguarda HIGH do sensor (máx 100µs) */
+    t_start = time_us_32();
+    while (gpio_get(DHT22_PIN) == 0) {
+        if ((time_us_32() - t_start) > 100) return false;
     }
-  }
+    /* Aguarda fim do HIGH inicial (máx 100µs) */
+    t_start = time_us_32();
+    while (gpio_get(DHT22_PIN) == 1) {
+        if ((time_us_32() - t_start) > 100) return false;
+    }
 
-  /* Checksum */
-  uint8_t checksum = (data[0] + data[1] + data[2] + data[3]) & 0xFF;
-  if (data[4] != checksum)
-    return false;
+    /* Lê 40 bits */
+    for (int i = 0; i < 40; i++) {
+        /* Aguarda início do bit: LOW ~50µs (máx 100µs) */
+        t_start = time_us_32();
+        while (gpio_get(DHT22_PIN) == 0) {
+            if ((time_us_32() - t_start) > 100) return false;
+        }
+        /* Mede duração do HIGH:
+           < 40µs  = bit 0
+           >= 40µs = bit 1 */
+        t_start = time_us_32();
+        while (gpio_get(DHT22_PIN) == 1) {
+            if ((time_us_32() - t_start) > 100) return false;
+        }
+        uint32_t high_us = time_us_32() - t_start;
+        data[i / 8] <<= 1;
+        if (high_us >= 40) {
+            data[i / 8] |= 1;
+        }
+    }
 
-  /* Decodifica umidade e temperatura */
-  *hum = (float)((data[0] << 8) | data[1]) / 10.0f;
-  *temp = (float)(((data[2] & 0x7F) << 8) | data[3]) / 10.0f;
-  if (data[2] & 0x80)
-    *temp = -(*temp); /* temperatura negativa */
-  return true;
+    /* Checksum */
+    uint8_t checksum = (data[0] + data[1] + data[2] + data[3]) & 0xFF;
+    if (data[4] != checksum) return false;
+
+    /* Decodifica */
+    *hum  = (float)((data[0] << 8) | data[1]) / 10.0f;
+    *temp = (float)(((data[2] & 0x7F) << 8) | data[3]) / 10.0f;
+    if (data[2] & 0x80) *temp = -(*temp);
+
+    return true;
 }
 
 /* ============================================================================
@@ -701,8 +696,68 @@ static err_t http_accept_cb(void *arg, struct tcp_pcb *newpcb, err_t err) {
 
 /* --- Inicializa WiFi CYW43 nativo e servidor TCP na porta 80 --- */
 static bool wifi_init(void) {
-  /* PLACA STANDARD DETECTADA: BYPASS DO WI-FI PARA EVITAR CONGELAMENTO */
-  return false;
+    printf("[WiFi] Iniciando CYW43...\n");
+
+    if (cyw43_arch_init()) {
+        printf("[WiFi] ERRO: falha ao inicializar CYW43\n");
+        return false;
+    }
+
+    cyw43_arch_enable_sta_mode();
+    printf("[WiFi] Conectando a: %s\n", WIFI_SSID);
+
+    /* Atualiza OLED durante tentativa de conexão */
+    oled_clear();
+    oled_str(10, 2, "FARMTECH DOMO");
+    oled_str(10, 4, "Conectando WiFi...");
+    oled_str(10, 5, WIFI_SSID);
+    oled_flush();
+
+    int ret = cyw43_arch_wifi_connect_timeout_ms(
+        WIFI_SSID, WIFI_SENHA,
+        CYW43_AUTH_WPA2_AES_PSK,
+        WIFI_TIMEOUT_MS
+    );
+
+    if (ret != 0) {
+        printf("[WiFi] Falha na conexao (cod %d). Continuando sem WiFi.\n", ret);
+        oled_clear();
+        oled_str(10, 3, "WiFi: FALHOU");
+        oled_str(10, 5, "Modo offline");
+        oled_flush();
+        sleep_ms(1500);
+        return false;
+    }
+
+    /* Obtém e salva o IP */
+    uint8_t *ip = (uint8_t *)&(cyw43_state.netif[0].ip_addr.addr);
+    snprintf(ip_str, sizeof(ip_str), "%d.%d.%d.%d",
+             ip[0], ip[1], ip[2], ip[3]);
+    printf("[WiFi] Conectado! IP: %s\n", ip_str);
+
+    /* Inicia servidor HTTP na porta 80 */
+    struct tcp_pcb *pcb = tcp_new();
+    if (!pcb) {
+        printf("[WiFi] ERRO: tcp_new() falhou\n");
+        return false;
+    }
+    if (tcp_bind(pcb, IP_ADDR_ANY, HTTP_PORT) != ERR_OK) {
+        printf("[WiFi] ERRO: tcp_bind() falhou\n");
+        return false;
+    }
+    http_pcb = tcp_listen(pcb);
+    tcp_accept(http_pcb, http_accept_cb);
+    printf("[WiFi] Servidor HTTP: http://%s/\n", ip_str);
+
+    /* Confirma no OLED */
+    oled_clear();
+    oled_str(10, 2, "WiFi: CONECTADO");
+    oled_str(4, 4, ip_str);
+    oled_str(4, 6, "Acesse no navegador");
+    oled_flush();
+    sleep_ms(2000);
+
+    return true;
 }
 
 /* ============================================================================
@@ -808,20 +863,17 @@ static void ler_sensores(void) {
     }
   }
 
-  /* LDR — luminosidade simulada via MOCK FÍSICO (Joystick Eixo X no ADC0 / GP26) 
-   * Centro do joystick (2048) = ~50%
-   * Empurrar para a Esquerda/Direita afeta o mock de luz interativamente. */
-  if (sensor_ldr_ativo) {
+  /* LDR: usa Joystick X como mock APENAS quando no dashboard. */
+  if (sensor_ldr_ativo && tela_atual == TELA_DASHBOARD) {
     adc_select_input(0); /* ADC0 (Eixo X do Joystick) */
     luz_ambiente_atual = (int)((adc_read() / 4095.0f) * 100.0f);
   }
 
-  /* Nível de água simulado via MOCK FÍSICO (Joystick Eixo Y no ADC1 / GP27) 
-   * Centro do joystick (2048) = ~50%
-   * Empurrar para Cima/Baixo afeta a água (0% a 100%) interativamente. */
-  if (sensor_agua_ativo) {
+  /* Nível de água: usa Joystick Y como mock APENAS quando no dashboard.
+   * Quando o menu está aberto, o joystick Y é reservado para navegação. */
+  if (sensor_agua_ativo && tela_atual == TELA_DASHBOARD) {
     adc_select_input(1); /* ADC1 (Eixo Y do Joystick) */
-    nivel_agua_atual = 100 - (int)((adc_read() / 4095.0f) * 100.0f); /* invertido (cima = cheio) */
+    nivel_agua_atual = 100 - (int)((adc_read() / 4095.0f) * 100.0f);
   }
 }
 
@@ -1377,12 +1429,21 @@ static void atualizar_oled(void) {
  */
 
 static void atualizar_serial(void) {
-  printf("[FARM] T=%.1f U=%d%% H2O=%d%% Luz=%d%% | "
-         "V:%d N:%d B:%d G:%d | %s | DHT:%s | Tela:%d | WiFi:%s\n",
-         temperatura_atual, umidade_atual, nivel_agua_atual, luz_ambiente_atual,
-         status_vent, status_neb, status_bomba, status_grow,
-         modo_automatico ? "AUTO" : "MANUAL", dht22_ok ? "OK" : "SIM",
-         (int)tela_atual, wifi_conectado ? ip_str : "OFF");
+    static uint32_t ultimo_print_ms = 0;
+    uint32_t agora = to_ms_since_boot(get_absolute_time());
+
+    /* Imprime apenas 1x por segundo para não saturar o buffer USB */
+    if (agora - ultimo_print_ms < 1000) return;
+    ultimo_print_ms = agora;
+
+    printf("[FARM] T=%.1f U=%d%% H2O=%d%% Luz=%d%% | "
+           "V:%d N:%d B:%d G:%d | %s | DHT:%s | Tela:%d | WiFi:%s\n",
+           temperatura_atual, umidade_atual, nivel_agua_atual, luz_ambiente_atual,
+           status_vent, status_neb, status_bomba, status_grow,
+           modo_automatico ? "AUTO" : "MANUAL",
+           dht22_ok ? "OK" : "SIM",
+           (int)tela_atual,
+           wifi_conectado ? ip_str : "OFF");
 }
 
 /* ============================================================================
@@ -1408,16 +1469,36 @@ static void melodia_boot(void) {
 int main(void) {
   setup_hardware();
 
-  /* Tela de splash no OLED */
+  /* =========================================
+   * MODO DIAGNOSTICO: RAIO-X CYW43 (WIFI/BT)
+   * ========================================= */
   oled_clear();
-  oled_str(12, 2, "FARMTECH DOMO");
-  oled_str(18, 4, "Inicializando...");
+  oled_str(0, 0, "=== RAIO-X HARDWARE ===");
+  oled_str(0, 2, "Buscando Chip CYW43...");
+  oled_str(0, 3, "(Antena Wi-Fi/Blueto)");
+  oled_str(0, 5, "Pingando Hardware...");
+  oled_str(0, 7, "Se travar= Nao e Pico W");
   oled_flush();
+  sleep_ms(1500);
 
-  /* Melodia de boot */
-  melodia_boot();
-  oled_str(18, 5, "Melodia OK...");
-  oled_flush();
+  if (cyw43_arch_init() == 0) {
+    oled_clear();
+    oled_str(0, 0, "=== RAIO-X HARDWARE ===");
+    oled_str(0, 2, ">> PICO W DETECTADO! <<");
+    oled_str(0, 4, "[OK] Bluetooth Fisico");
+    oled_str(0, 5, "[OK] Wi-Fi Fisico");
+    oled_str(0, 7, "Pressione SW para RESET");
+    oled_flush();
+  } else {
+    oled_clear();
+    oled_str(0, 0, "=== RAIO-X HARDWARE ===");
+    oled_str(0, 2, ">> ERRO / DEAD CHIP <<");
+    oled_str(0, 4, "[X] Sem Bluetooth");
+    oled_str(0, 5, "[X] Sem Wi-Fi");
+    oled_str(0, 7, "Esta e uma Pico Comum");
+    oled_flush();
+  }
+  while(true) { sleep_ms(100); }
 
   /* Conecta WiFi (não bloqueia se falhar) */
   wifi_conectado = wifi_init();
