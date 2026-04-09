@@ -1,0 +1,82 @@
+flowchart TD
+    A([🚀 INÍCIO]) --> B
+
+    B["⚙️ setup_hardware()\nI2C · ADC · GPIO · IRQ · PWM · PIO"] --> C
+
+    C["📶 wifi_init()\nCYW43 + lwIP HTTP"] --> D
+
+    D["🖥️ Splash OLED\n🎵 Melodia de Boot"] --> E
+
+    E(["🔁 LOOP PRINCIPAL — 50ms"])
+
+    E --> F
+
+    subgraph SENSORES ["📡 SENSORIAMENTO"]
+        F{"DHT22\ndisponível?"}
+        F -- Sim --> G["✅ Leitura real\nTemp · Umidade"]
+        F -- Não --> H["🔄 Fallback\nJoystick ADC"]
+        G --> I["📊 LDR · Nível d'água\nvia ADC"]
+        H --> I
+    end
+
+    I --> J
+
+    subgraph DECISAO ["🧠 PROCESSAMENTO"]
+        J["processar_decisoes()\nCompara com setpoints da receita"]
+        J --> K{"Condição\nCrítica?"}
+        K -- Sim --> L["⚠️ Gera Alerta\nBuffer circular (5 entradas)"]
+        K -- Não --> M["✅ Estado Normal"]
+        L --> N["🔴 Flag crítica ativa"]
+        M --> N
+    end
+
+    N --> O
+
+    subgraph ATUADORES ["⚡ ATUAÇÃO"]
+        O["atualizar_atuadores()\nLED RGB PWM · Buzzer PWM"]
+        O --> P["atualizar_matriz_leds()\nWS2812B 5×5 via PIO\n7 padrões visuais"]
+    end
+
+    P --> Q
+
+    subgraph INTERFACE ["🖥️ INTERFACE LOCAL"]
+        Q["atualizar_menu()\nFSM 7 telas · Poll joystick 200ms\nTimeout 10s → dashboard"]
+        Q --> R["atualizar_oled()\nFramebuffer 1024B → flush I2C"]
+    end
+
+    R --> S
+
+    subgraph WIFI ["📡 COMUNICAÇÃO IoT"]
+        S["cyw43_arch_poll()\nProcessa requisições HTTP"]
+        S --> T{"Requisição\nrecebida?"}
+        T -- "GET /" --> U["Serve dashboard HTML"]
+        T -- "GET /status" --> V["Retorna JSON\ncom telemetria"]
+        T -- "GET /cmd" --> W["Executa comando\nde atuador"]
+        T -- Nenhuma --> X["Continua loop"]
+        U --> X
+        V --> X
+        W --> X
+    end
+
+    X --> Y["📟 atualizar_serial()\nLog USB throttled 1×/segundo"]
+
+    Y --> Z["💤 sleep_ms(50)"]
+    Z --> E
+
+    subgraph IRQ ["⚡ INTERRUPÇÕES — Paralelo ao loop"]
+        direction LR
+        IR1["Botão A\nGP5 IRQ"] --> IR4["gpio_irq_callback()\nDetecta curta < 500ms\nDetecta longa ≥ 2000ms\nDebounce 50ms"]
+        IR2["Botão B\nGP6 IRQ"] --> IR4
+        IR3["Joystick SW\nGP22 IRQ"] --> IR4
+        IR4 --> IR5["Seta flag volatile\nprocessada no loop"]
+    end
+
+    style A fill:#2d6a4f,color:#fff,stroke:#1b4332
+    style E fill:#1d3557,color:#fff,stroke:#0d1b2a
+    style Z fill:#1d3557,color:#fff,stroke:#0d1b2a
+    style SENSORES fill:#e8f5e9,stroke:#388e3c
+    style DECISAO fill:#fff3e0,stroke:#f57c00
+    style ATUADORES fill:#fce4ec,stroke:#c62828
+    style INTERFACE fill:#e3f2fd,stroke:#1565c0
+    style WIFI fill:#f3e5f5,stroke:#6a1b9a
+    style IRQ fill:#fff8e1,stroke:#f9a825
