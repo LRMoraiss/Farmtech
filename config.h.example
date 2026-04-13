@@ -2,7 +2,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define WIFI_SSID  "SUA_REDE_AQUI"
-#define WIFI_SENHA "SUA_SENHA_AQUI"
+#define WIFI_SSID "brisa-2218544"
+#define WIFI_SENHA "uubrz3zp"
 
 #endif
