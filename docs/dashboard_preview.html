@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FarmTech Domo</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-primary: #0f172a;
+  --bg-card: rgba(30, 41, 59, 0.7);
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --accent: #10b981;
+  --accent-hover: #059669;
+  --danger: #ef4444;
+  --danger-hover: #dc2626;
+  --border-radius: 16px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-primary);
+  background-image: radial-gradient(circle at top right, #1e293b, #0f172a);
+  color: var(--text-main);
+  padding: 24px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+h1 {
+  font-weight: 800;
+  font-size: 2rem;
+  margin-bottom: 24px;
+  background: linear-gradient(to right, #34d399, #10b981);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.5px;
+  animation: fadeInDown 0.8s ease-out;
+}
+.container {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--border-radius);
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeInUp 0.5s ease-out forwards;
+}
+.card:nth-child(2) { animation-delay: 0.1s; }
+.card:nth-child(3) { animation-delay: 0.2s; }
+.card:nth-child(4) { animation-delay: 0.3s; }
+
+.card h2 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.sensor-box {
+  background: rgba(0,0,0,0.2);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  transition: transform 0.3s ease;
+}
+.sensor-box:hover {
+  transform: translateY(-2px);
+  background: rgba(255,255,255,0.02);
+}
+.val {
+  font-size: 2.2rem;
+  font-weight: 800;
+  display: block;
+  color: var(--text-main);
+}
+.unit {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.actuator-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.actuator-row:last-child { border-bottom: none; padding-bottom: 0; }
+.actuator-label { font-weight: 600; }
+.btn-group { display: flex; gap: 8px; }
+
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  background: var(--text-muted);
+  color: #fff;
+}
+.btn:active { transform: scale(0.95); }
+.btn.on { background: var(--accent); color: #fff; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+.btn.on:hover { background: var(--accent-hover); }
+
+.btn.off { background: rgba(255,255,255,0.1); color: var(--text-muted); }
+.btn.off:hover { background: rgba(255,255,255,0.2); color: #fff; }
+
+.btn.red { background: var(--danger); }
+.btn.red:hover { background: var(--danger-hover); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3); }
+
+.status-bar {
+  text-align: center;
+  padding: 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  background: rgba(0,0,0,0.4);
+  border-radius: 8px;
+  margin-top: 10px;
+}
+.crit {
+  color: var(--danger);
+  animation: pulseCrit 1.5s infinite;
+  font-weight: bold;
+}
+
+@keyframes fadeInUp {
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulseCrit {
+  0% { opacity: 1; text-shadow: 0 0 10px var(--danger); }
+  50% { opacity: 0.5; text-shadow: none; }
+  100% { opacity: 1; text-shadow: 0 0 10px var(--danger); }
+}
+</style>
+</head>
+<body>
+
+<h1>🌱 FARMTECH DOMO</h1>
+
+<div class="container">
+  
+  <div class="card">
+    <h2>📊 Sensores ao Vivo</h2>
+    <div class="grid">
+      <div class="sensor-box"><span class="val" id="temp">26.5</span><span class="unit">°C</span></div>
+      <div class="sensor-box"><span class="val" id="umid">80</span><span class="unit">% Umidade</span></div>
+      <div class="sensor-box"><span class="val" id="agua">45</span><span class="unit">% Água</span></div>
+      <div class="sensor-box"><span class="val" id="luz">90</span><span class="unit">% Luz</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>⚙️ Atuadores</h2>
+    <div class="actuator-row">
+      <span class="actuator-label">Ventilação</span>
+      <div class="btn-group">
+        <button class="btn on" onclick="cmd('vent',1)">ON</button>
+        <button class="btn off" onclick="cmd('vent',0)">OFF</button>
+      </div>
+    </div>
+    <div class="actuator-row">
+      <span class="actuator-label">Nebulizador</span>
+      <div class="btn-group">
+        <button class="btn on" onclick="cmd('neb',1)">ON</button>
+        <button class="btn off" onclick="cmd('neb',0)">OFF</button>
+      </div>
+    </div>
+    <div class="actuator-row">
+      <span class="actuator-label">Bomba de Água</span>
+      <div class="btn-group">
+        <button class="btn on" onclick="cmd('pump',1)">ON</button>
+        <button class="btn off" onclick="cmd('pump',0)">OFF</button>
+      </div>
+    </div>
+    <div class="actuator-row">
+      <span class="actuator-label">Luzes Grow</span>
+      <div class="btn-group">
+        <button class="btn on" onclick="cmd('grow',1)">ON</button>
+        <button class="btn off" onclick="cmd('grow',0)">OFF</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🧠 Sistema</h2>
+    <div class="actuator-row">
+      <span class="actuator-label">Controle Principal</span>
+      <div class="btn-group">
+        <button class="btn on" onclick="cmd('mode','auto')">AUTO</button>
+        <button class="btn red" onclick="cmd('mode','manual')">MANUAL</button>
+      </div>
+    </div>
+    <div class="status-bar" id="modo">Status: Monitoramento Automático Ativo</div>
+  </div>
+
+  <div class="status-bar" id="status">Placa Mockada: Rodando no Desktop (Zero Delay)</div>
+  <div class="status-bar" id="ip" style="opacity: 0.5; margin-top: 0;">Conectado via Localhost (Mock)</div>
+
+</div>
+
+<script>
+function cmd(a,v){
+    document.getElementById('status').innerHTML = '<span style="color:var(--accent);">Comando enviado com sucesso: <b>'+a+'='+v+'</b></span>';
+}
+</script>
+</body>
+</html>

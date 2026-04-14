@@ -37,3 +37,4 @@ Makefile
 
 # Credenciais WiFi (nunca versionar)
 include/config.h
+config.h
